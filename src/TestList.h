@@ -9,7 +9,7 @@ private:
 	::std::list<int>* internal;
 
 public:
-	TestList() {
+	TestList(int levelmax) : SkipList(levelmax) {
 		internal= new ::std::list<int>();
 	}
 

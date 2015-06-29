@@ -59,7 +59,7 @@ inline long rand_range_re(unsigned int *seed, long r) {
   return v;
 }
 
-typedef struct thread_data {
+typedef struct benchthread_data {
   val_t first;
   long range;
   int update;
@@ -83,7 +83,7 @@ typedef struct thread_data {
   unsigned int seed;
   SkipList *set;
   barrier_t *barrier;
-} thread_data_t;
+} benchthread_data_t;
 
 inline void *xmalloc(size_t size)
 {

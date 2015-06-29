@@ -9,6 +9,7 @@
 #include <iostream>
 #include <iomanip>
 #include <cstdlib>
+#include <string>
 #include <assert.h>
 #include <getopt.h>
 #include <sys/time.h>
@@ -16,6 +17,7 @@
 #include <signal.h>
 
 #include "TestList.h"
+#include "LazySkipList.h"
 
 #include "synchrobench.h"
 
@@ -51,11 +53,16 @@ unsigned int levelmax;
     printf("%d nodes of level %d\n", arr[j], j);
 }*/
 
-SkipList* sl_set_new()
+SkipList* sl_set_new(int type)
 {
 	SkipList *set;
 
-	set= new TestList();
+	if( type == 0)
+		set= new TestList(levelmax);
+	else if( type == 1 )
+		set= new LazySkipList(levelmax);
+	else
+		set= NULL;
 
 	return set;
 }
@@ -79,7 +86,7 @@ void *test(void *data) {
 	val_t val = 0;
 	int unext;
 
-	thread_data_t *d = (thread_data_t *) data;
+	benchthread_data_t *d = (benchthread_data_t *) data;
 
 	/* Wait on barrier */
 	barrier_cross(d->barrier);
@@ -172,7 +179,7 @@ void *test(void *data) {
 
 
 int main(int argc, char** argv){
-	TestList x;
+	TestList x(3);
 
 	::std::cout << "Test2" << ::std::endl;
 
@@ -185,6 +192,7 @@ int main(int argc, char** argv){
 	struct option long_options[] = {
 	      // These options don't set a flag
 	      {"help",                      no_argument,       NULL, 'h'},
+		  {"list-type",                 required_argument, NULL, 'l'},
 	      {"duration",                  required_argument, NULL, 'd'},
 	      {"initial-size",              required_argument, NULL, 'i'},
 	      {"thread-num",                required_argument, NULL, 't'},
@@ -202,7 +210,7 @@ int main(int argc, char** argv){
 	unsigned long reads, effreads, updates, effupds, aborts, aborts_locked_read,
 	  aborts_locked_write, aborts_validate_read, aborts_validate_write,
 	  aborts_validate_commit, aborts_invalid_memory, max_retries;
-	thread_data_t *data;
+	benchthread_data_t *data;
 	pthread_t *threads;
 	pthread_attr_t attr;
 	barrier_t barrier;
@@ -218,10 +226,11 @@ int main(int argc, char** argv){
 	int alternate = DEFAULT_ALTERNATE;
 	int effective = DEFAULT_EFFECTIVE;
 	sigset_t block_set;
+	int type= 0;
 
 	while (1) {
 		i = 0;
-		c = getopt_long(argc, argv, "hAf:d:i:t:r:S:u:x:", long_options, &i);
+		c = getopt_long(argc, argv, "hAf:l:d:i:t:r:S:u:x:", long_options, &i);
 
 		if (c == -1)
 			break;
@@ -245,6 +254,7 @@ int main(int argc, char** argv){
 			::std::cout << "  -A, --Alternate\n";
 			::std::cout
 					<< "        Consecutive insert/remove target the same value\n";
+			::std::cout << "  -l, --list-type TestList|LazySkipList\n";
 			::std::cout << "  -f, --effective <int>\n";
 			::std::cout
 					<< "        update txs must effectively write (0=trial, 1=effective, default="
@@ -284,6 +294,19 @@ int main(int argc, char** argv){
 		case 'A':
 			alternate = 1;
 			break;
+		case 'l':
+		{
+			::std::string ltype(optarg);
+			if( ltype.compare("TestList") ) {
+				type= 0;
+			} else if( ltype.compare("LazySkipList") ) {
+				type= 1;
+			} else {
+				::std::cerr << "Unkown List-Type " << ltype << "\nExiting" << ::std::endl;
+				exit(1);
+			}
+			break;
+		}
 		case 'f':
 			effective = atoi(optarg);
 			break;
@@ -339,7 +362,7 @@ int main(int argc, char** argv){
 	timeout.tv_sec = duration / 1000;
 	timeout.tv_nsec = (duration % 1000) * 1000000;
 
-	data = (thread_data_t *)xmalloc(nb_threads * sizeof(thread_data_t));
+	data = (benchthread_data_t *)xmalloc(nb_threads * sizeof(benchthread_data_t));
 	threads = (pthread_t *)xmalloc(nb_threads * sizeof(pthread_t));
 
 	if (seed == 0)
@@ -348,7 +371,7 @@ int main(int argc, char** argv){
 	  srand(seed);
 
 	levelmax = floor_log_2((unsigned int) initial);
-	set = sl_set_new();
+	set = sl_set_new(type);
 	stop = 0;
 
 	global_seed = rand();
