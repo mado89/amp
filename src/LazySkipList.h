@@ -33,19 +33,22 @@ class LazyNode {
 
 		~LazyNode() {
 			pthread_mutex_destroy(&ilock);
-			for(int i= 0; i < topLevel+1; i++)
-				delete next[i];
+			/*for(int i= 0; i < topLevel+1; i++)
+				delete next[i];*/
+			delete[] next;
 		}
 
 		void lock() {
+			// ::std::cout << this << " lock" << pthread_self() << " " << ::std::endl;
 			pthread_mutex_lock(&ilock);
 		}
 
 		void unlock() {
-			pthread_mutex_lock (&ilock);
+			// ::std::cout << this << " unlock" << ::std::endl;
+			pthread_mutex_unlock (&ilock);
 		}
 
-		int height(){ return topLevel+1; }
+		int height(){ return topLevel; }
 };
 
 private:
@@ -56,13 +59,14 @@ public:
 		head= new LazyNode(::std::numeric_limits<int>::min(),levelmax);
 		tail= new LazyNode(::std::numeric_limits<int>::max(),levelmax);
 
-		for(int i= 0; i < head->height(); i++) {
+		for(int i= 0; i <= head->height(); i++) {
 			head->next[i]= tail;
 		}
 	}
 
 	~LazySkipList() {
-
+		delete head;
+		delete tail;
 	}
 
 private:
@@ -92,7 +96,9 @@ public:
 		LazyNode* succs[MAX_LEVEL+1];
 
 		while (true) {
+			// ::std::cout << "Attempt find" << ::std::endl;
 			int f = find(x, preds, succs);
+			// ::std::cout  << pthread_self()<< ": Attempt find ended " << f << ::std::endl;
 			if (f >= 0) {
 				LazyNode* Found = succs[f];
 				if (!Found->marked) {
@@ -105,6 +111,8 @@ public:
 			}
 			// not in skiplist, try to add
 
+			// ::std::cout << "Attempt add" << ::std::endl;
+
 			int highlock = -1; // highest level locked
 
 			LazyNode* pred;
@@ -113,12 +121,15 @@ public:
 			bool valid = true;
 
 			for (int level = 0; valid && (level <= k); level++) { // validate
+				// ::std::cout << level <<" " << k << " " << MAX_LEVEL << ::std::endl;
 				pred = preds[level];
 				succ = succs[level];
+				// ::std::cout << pred << ::std::endl;
 				pred->lock();
 				highlock = level;
 				valid = !pred->marked && !succ->marked && (pred->next[level] == succ);
 			}
+			// ::std::cout << "Validation done" << ::std::endl;
 			if (!valid) {
 				for (int l = 0; l <= highlock; l++) {
 					preds[l]->unlock();
@@ -159,10 +170,14 @@ public:
 		LazyNode* preds[MAX_LEVEL+1];
 		LazyNode* succs[MAX_LEVEL+1];
 
+		// ::std::cout << "remove " << x << ::std::endl;
+
 		while (true) {
 			int f = find(x, preds, succs);
+			// ::std::cout << "f " << f << ::std::endl;
 			if (f >= 0)
 				victim = succs[f];
+			// ::std::cout << "f" << f << " marked? " << marked << " f>=0" << (f>=0) << " victim->fullylinked" << victim->fullylinked << " victim->height" << victim->height() << " victim->marked" << victim->marked << ::std::endl;
 			if (marked || (f >= 0 && victim->fullylinked && victim->height() == f
 							&& !victim->marked)) {
 				if (!marked) {
@@ -191,8 +206,12 @@ public:
 						preds[l]->unlock();
 					continue;
 				}
-				for (int l=k; l>=0; l--)
+				for (int l=k; l>=0; l--) {
+					// LazyNode* x= preds[l]->next[l];
 					preds[l]->next[l] = victim->next[l];
+					// ::std::cout << "Ich loesche!" << ::std::endl;
+					// delete x;
+				}
 				victim->unlock();
 				for (int l = 0; l <= highlock; l++)
 					preds[l]->unlock();

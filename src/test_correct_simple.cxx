@@ -33,37 +33,22 @@ pthread_key_t rng_seed_key;
 #endif /* ! TLS */
 unsigned int levelmax;
 
-/*void print_skiplist(sl_intset_t *set) {
-  sl_node_t *curr;
-  int i, j;
-  int arr[levelmax];
-
-  for (i=0; i< sizeof arr/sizeof arr[0]; i++) arr[i] = 0;
-
-  curr = set->head;
-  do {
-    printf("%d", (int) curr->val);
-    for (i=0; i<curr->toplevel; i++) {
-      printf("-*");
-    }
-    arr[curr->toplevel-1]++;
-    printf("\n");
-    curr = curr->next[0];
-  } while (curr);
-  for (j=0; j<levelmax; j++)
-    printf("%d nodes of level %d\n", arr[j], j);
-}*/
-
 SkipList* sl_set_new(int type)
 {
 	SkipList *set;
 
-	if( type == 0)
+	if( type == 0) {
+		::std::cout << "Using TestList" << ::std::endl;
 		set= new TestList(levelmax);
-	else if( type == 1 )
+	}
+	else if( type == 1 ){
+		::std::cout << "Using LazySkipList" << ::std::endl;
 		set= new LazySkipList(levelmax);
-	else if( type == 2 )
+	}
+	else if( type == 2 ){
+		::std::cout << "Using LockFreeSkipList" << ::std::endl;
 		set= new LockFreeSkipList(levelmax);
+	}
 	else
 		set= NULL;
 
@@ -74,166 +59,136 @@ void sl_set_delete(SkipList *set) {
 	delete set;
 }
 
+typedef struct tdata {
+  val_t first;
+  long range;
+  unsigned long nb_add;
+  unsigned long nb_added;
+  unsigned long nb_remove;
+  unsigned long nb_removed;
+  unsigned long nb_contains;
+  unsigned long nb_found;
+  unsigned long nb_aborts;
+  unsigned long nb_aborts_locked_read;
+  unsigned long nb_aborts_locked_write;
+  unsigned long nb_aborts_validate_read;
+  unsigned long nb_aborts_validate_write;
+  unsigned long nb_aborts_validate_commit;
+  unsigned long nb_aborts_invalid_memory;
+  unsigned long max_retries;
+  unsigned int seed;
+  SkipList *set;
+  barrier_t *barrier;
+} tdata_t;
+
 int sl_set_size(SkipList *set)
 {
 	return set->size();
 }
 
-int sl_add(SkipList *set, val_t val, int transactional)
-{
-	return set->add(val);
-}
-
 void *test(void *data) {
-	val_t last = -1;
-	val_t val = 0;
-	int unext;
+	int first;
 
-	benchthread_data_t *d = (benchthread_data_t *) data;
+	tdata_t *d = (tdata_t *) data;
 
 	/* Wait on barrier */
 	barrier_cross(d->barrier);
 
-	/* Is the first op an update? */
-	unext = (rand_range_re(&d->seed, 100) - 1 < d->update);
-
-	while (stop == 0) {
-
-		if (unext) { // update
-
-			if (last < 0) { // add
-				val = rand_range_re(&d->seed, d->range);
-				// if (sl_add(d->set, val, TRANSACTIONAL)) {
-				if( d->set->add(val) ) {
-					d->nb_added++;
-					last = val;
-				}
-				d->nb_add++;
-
-			} else { // remove
-
-				if (d->alternate) { // alternate mode (default)
-
-					// if (sl_remove(d->set, last, TRANSACTIONAL)) {
-					if( d->set->remove(last) ) {
-						d->nb_removed++;
-					}
-					last = -1;
-
-				} else {
-
-					// Random computation only in non-alternated cases
-					val = rand_range_re(&d->seed, d->range);
-					// Remove one random value
-					// if (sl_remove(d->set, val, TRANSACTIONAL)) {
-					if( d->set->remove(val)) {
-						d->nb_removed++;
-						// Repeat until successful, to avoid size variations
-						last = -1;
-					}
-
-				}
-				d->nb_remove++;
-			}
-
-		} else { // read
-
-			if (d->alternate) {
-				if (d->update == 0) {
-					if (last < 0) {
-						val = d->first;
-						last = val;
-					} else { // last >= 0
-						val = rand_range_re(&d->seed, d->range);
-						last = -1;
-					}
-				} else { // update != 0
-					if (last < 0) {
-						val = rand_range_re(&d->seed, d->range);
-						//last = val;
-					} else {
-						val = last;
-					}
-				}
-			} else
-				val = rand_range_re(&d->seed, d->range);
-
-			// if (sl_contains(d->set, val, TRANSACTIONAL))
-			if( d->set->contains(val) )
-				d->nb_found++;
-			d->nb_contains++;
-
-		}
-
-		/* Is the next op an update? */
-		if (d->effective) { // a failed remove/add is a read-only tx
-			unext =
-					((100 * (d->nb_added + d->nb_removed))
-							< (d->update
-									* (d->nb_add + d->nb_remove + d->nb_contains)));
-		} else { // remove/add (even failed) is considered as an update
-			unext = ((rand_range_re(&d->seed, 100) - 1) < d->update);
-		}
-
-	  }
+	first= d->first;
+	while(first < d->range){
+		d->nb_add++;
+		// ::std::cout << pthread_self() << ": Adding " << first << " " << d->range << ::std::endl;
+		if( d->set->add(first) ){
+			// ::std::cout << "Added" << first << ::std::endl;
+			first++;
+			d->nb_added++;
+		} /*else {
+			::std::cout << "Failed" << first << ::std::endl;
+		}*/
+	}
 
 	return NULL;
 }
 
+void *test_remove(void *data) {
+	int first;
+
+	tdata_t *d = (tdata_t *) data;
+
+	/* Wait on barrier */
+	barrier_cross(d->barrier);
+
+	first= d->first;
+	while(first < d->range){
+		d->nb_remove++;
+//		::std::cout << pthread_self() << ": Remove " << first << " " << d->range << ::std::endl;
+
+		if( d->set->remove(first) ){
+			// ::std::cout << "Removed" << first << ::std::endl;
+			first++;
+			d->nb_removed++;
+		} /*else {
+			::std::cout << "Failed" << first << ::std::endl;
+		}*/
+	}
+
+	return NULL;
+}
+
+void *test_contains(void *data) {
+	int first;
+
+	tdata_t *d = (tdata_t *) data;
+
+	/* Wait on barrier */
+	barrier_cross(d->barrier);
+
+	first= d->first;
+	while(first < d->range){
+		d->nb_contains++;
+		// ::std::cout << pthread_self() << ": Contains " << first << " " << d->range << ::std::endl;
+
+		if( d->set->contains(first) ){
+			// ::std::cout << "Found" << first << ::std::endl;
+			first++;
+			d->nb_found++;
+		} /*else {
+			::std::cout << "Failed" << first << ::std::endl;
+		}*/
+	}
+
+	return NULL;
+}
 
 int main(int argc, char** argv){
-	TestList x(3);
-
-	::std::cout << "Test2" << ::std::endl;
-
-	x.add(0);
-	x.add(1);
-	x.add(-1);
-
-	::std::cout << x.contains(2) << ::std::endl;
-
 	struct option long_options[] = {
 	      // These options don't set a flag
 	      {"help",                      no_argument,       NULL, 'h'},
 		  {"list-type",                 required_argument, NULL, 'l'},
-	      {"duration",                  required_argument, NULL, 'd'},
-	      {"initial-size",              required_argument, NULL, 'i'},
-	      {"thread-num",                required_argument, NULL, 't'},
+		  {"initial-size",              required_argument, NULL, 'i'},
+		  {"thread-num",                required_argument, NULL, 't'},
 	      {"range",                     required_argument, NULL, 'r'},
-	      {"seed",                      required_argument, NULL, 'S'},
-	      {"update-rate",               required_argument, NULL, 'u'},
-	      {"unit-tx",                   required_argument, NULL, 'x'},
 	      {NULL, 0, NULL, 0}
 	    };
 
 	SkipList *set;
 	int i, c, size;
-	val_t last = 0;
-	val_t val = 0;
 	unsigned long reads, effreads, updates, effupds, aborts, aborts_locked_read,
-	  aborts_locked_write, aborts_validate_read, aborts_validate_write,
-	  aborts_validate_commit, aborts_invalid_memory, max_retries;
-	benchthread_data_t *data;
+		  aborts_locked_write, aborts_validate_read, aborts_validate_write,
+		  aborts_validate_commit, aborts_invalid_memory, max_retries;
 	pthread_t *threads;
 	pthread_attr_t attr;
 	barrier_t barrier;
 	struct timeval start, end;
-	struct timespec timeout;
 	int duration = DEFAULT_DURATION;
-	int initial = DEFAULT_INITIAL;
 	int nb_threads = DEFAULT_NB_THREADS;
 	long range = DEFAULT_RANGE;
-	int seed = DEFAULT_SEED;
-	int update = DEFAULT_UPDATE;
-	int unit_tx = DEFAULT_ELASTICITY;
-	int alternate = DEFAULT_ALTERNATE;
-	int effective = DEFAULT_EFFECTIVE;
-	sigset_t block_set;
+	int initial = DEFAULT_INITIAL;
 	int type= 0;
 
 	while (1) {
 		i = 0;
-		c = getopt_long(argc, argv, "hAf:l:d:i:t:r:S:u:x:", long_options, &i);
+		c = getopt_long(argc, argv, "h:l:i:t:r:", long_options, &i);
 
 		if (c == -1)
 			break;
@@ -246,26 +201,15 @@ int main(int argc, char** argv){
 			/* Flag is automatically set */
 			break;
 		case 'h':
-			::std::cout << "intset -- STM stress test (skip list)\n\n";
+			::std::cout << "intset -- Simple correctness test (skip list)\n\n";
 
 			::std::cout << "Usage:\n";
-			::std::cout << "  intset [options...]\n";
+			::std::cout << "  test_correct_simple [options...]\n";
 			::std::cout << "\n";
 			::std::cout << "Options:\n";
 			::std::cout << "  -h, --help\n";
 			::std::cout << "        Print this message\n";
-			::std::cout << "  -A, --Alternate\n";
-			::std::cout
-					<< "        Consecutive insert/remove target the same value\n";
 			::std::cout << "  -l, --list-type TestList|LazySkipList|LockFreeSkipList\n";
-			::std::cout << "  -f, --effective <int>\n";
-			::std::cout
-					<< "        update txs must effectively write (0=trial, 1=effective, default="
-					<< DEFAULT_EFFECTIVE << ")\n";
-			::std::cout << "  -d, --duration <int>\n";
-			::std::cout
-					<< "        Test duration in milliseconds (0=infinite, default="
-					<< DEFAULT_DURATION << ")\n";
 			::std::cout << "  -i, --initial-size <int>\n";
 			::std::cout
 					<< "        Number of elements to insert before test (default="
@@ -278,25 +222,7 @@ int main(int argc, char** argv){
 			::std::cout
 					<< "        Range of integer values inserted in set (default="
 					<< DEFAULT_RANGE << ")\n";
-			::std::cout << "  -S, --seed <int>\n";
-			::std::cout << "        RNG seed (0=time-based, default="
-					<< DEFAULT_SEED << ")\n";
-			::std::cout << "  -u, --update-rate <int>\n";
-			::std::cout << "        Percentage of update transactions (default="
-					<< DEFAULT_UPDATE << ")\n";
-			::std::cout << "  -x, --unit-tx (default=1)\n";
-			::std::cout << "        Use unit transactions\n";
-			::std::cout << "        0 = non-protected,\n";
-			::std::cout << "        1 = normal transaction,\n";
-			::std::cout << "        2 = read unit-tx,\n";
-			::std::cout << "        3 = read/add unit-tx,\n";
-			::std::cout << "        4 = read/add/rem unit-tx,\n";
-			::std::cout << "        5 = all recursive unit-tx,\n";
-			::std::cout << "        6 = harris lock-free\n";
 			exit(0);
-		case 'A':
-			alternate = 1;
-			break;
 		case 'l':
 		{
 			::std::string ltype(optarg);
@@ -312,12 +238,6 @@ int main(int argc, char** argv){
 			}
 			break;
 		}
-		case 'f':
-			effective = atoi(optarg);
-			break;
-		case 'd':
-			duration = atoi(optarg);
-			break;
 		case 'i':
 			initial = atoi(optarg);
 			break;
@@ -326,15 +246,6 @@ int main(int argc, char** argv){
 			break;
 		case 'r':
 			range = atol(optarg);
-			break;
-		case 'S':
-			seed = atoi(optarg);
-			break;
-		case 'u':
-			update = atoi(optarg);
-			break;
-		case 'x':
-			unit_tx = atoi(optarg);
 			break;
 		case '?':
 			::std::cout << "Use -h or --help for help\n";
@@ -345,77 +256,55 @@ int main(int argc, char** argv){
 	}
 
 	assert(duration >= 0);
-	assert(initial >= 0);
 	assert(nb_threads > 0);
 	assert(range > 0 && range >= initial);
-	assert(update >= 0 && update <= 100);
 
 	::std::cout << "Set type     : skip list\n";
 	::std::cout << "Duration     : " << duration << ::std::endl;
-	::std::cout << "Initial size : " << initial << ::std::endl;
 	::std::cout << "Nb threads   : " << nb_threads << ::std::endl;
 	::std::cout << "Value range  : " << range << ::std::endl;
-	::std::cout << "Seed         : " << seed << ::std::endl;
-	::std::cout << "Update rate  : " << update << ::std::endl;
-	::std::cout << "Lock alg.    : " << unit_tx << ::std::endl;
-	::std::cout << "Alternate    : " << alternate << ::std::endl;
-	::std::cout << "Effective    : " << effective << ::std::endl;
 	::std::cout << "Type sizes   : int=" << (int)sizeof(int) <<
 			"/long=" << (int)sizeof(long) << "/ptr=" <<
 			(int)sizeof(void *) << "/word=" << (int)sizeof(uintptr_t) << "\n";
 
-	timeout.tv_sec = duration / 1000;
-	timeout.tv_nsec = (duration % 1000) * 1000000;
+	levelmax = floor_log_2((unsigned int) range);
 
-	data = (benchthread_data_t *)xmalloc(nb_threads * sizeof(benchthread_data_t));
-	threads = (pthread_t *)xmalloc(nb_threads * sizeof(pthread_t));
-
-	if (seed == 0)
-	  srand((int)time(0));
-	else
-	  srand(seed);
-
-	levelmax = floor_log_2((unsigned int) initial);
+	::std::cout << "const";
 	set = sl_set_new(type);
-	stop = 0;
+	::std::cout << "done" << ::std::endl;
 
-	global_seed = rand();
-#ifdef TLS
-	rng_seed = &global_seed;
-#else /* ! TLS */
-	if (pthread_key_create(&rng_seed_key, NULL) != 0) {
-		fprintf(stderr, "Error creating thread local\n");
-		exit(1);
-	}
-	pthread_setspecific(rng_seed_key, &global_seed);
-#endif /* ! TLS */
-
-	/* Populate set */
 	::std::cout << "Adding " << initial << " entries to set\n";
 	i = 0;
 	while (i < initial) {
-		val = rand_range_re(&global_seed, range);
-		if (sl_add(set, val, 0)) {
-			last = val;
+		// ::std::cout << "Add " << set << " " << i << ::std::endl;
+		if (set->add(i)) {
 			i++;
 		}
 	}
 	size = sl_set_size(set);
 	::std::cout << "Set size     : " << size << ::std::endl;
-	::std::cout <<"Level max    : " << levelmax << ::std::endl;
+	::std::cout << "Level max    : " << levelmax << ::std::endl;
 
 	/* Access set from all threads */
 	barrier_init(&barrier, nb_threads + 1);
 	pthread_attr_init(&attr);
 	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
+	tdata_t* data;
+	data = (tdata_t *)malloc(nb_threads * sizeof(tdata_t));
+	threads = (pthread_t *)malloc(nb_threads * sizeof(pthread_t));
+	int h;
+
+	h= (range - initial);
+	h/= nb_threads;
+
 	for (i = 0; i < nb_threads; i++) {
+
+		data[i].first= initial + h*i;
+		data[i].range = initial + h*(i+1);
+
 		::std::cout << "Creating thread " << i << ::std::endl;
-		data[i].first = last;
-		data[i].range = range;
-		data[i].update = update;
-		data[i].unit_tx = unit_tx;
-		data[i].alternate = alternate;
-		data[i].effective = effective;
+		::std::cout << "first " << data[i].first << " " << data[i].range << ::std::endl;
+
 		data[i].nb_add = 0;
 		data[i].nb_added = 0;
 		data[i].nb_remove = 0;
@@ -433,8 +322,8 @@ int main(int argc, char** argv){
 		data[i].seed = rand();
 		data[i].set = set;
 		data[i].barrier = &barrier;
-		if (pthread_create(&threads[i], &attr, test, (void *) (&data[i]))
-				!= 0) {
+
+		if (pthread_create(&threads[i], &attr, test, (void *) (&data[i]))!= 0) {
 			::std::cerr << "Error creating thread\n";
 			exit(1);
 		}
@@ -446,29 +335,66 @@ int main(int argc, char** argv){
 
 	printf("STARTING...\n");
 	gettimeofday(&start, NULL);
-	if (duration > 0) {
-		nanosleep(&timeout, NULL);
-	} else {
-		sigemptyset(&block_set);
-		sigsuspend(&block_set);
-	}
 
-#ifdef ICC
-    stop = 1;
-#else
-    AO_store_full(&stop, 1);
-#endif /* ICC */
-
-    gettimeofday(&end, NULL);
     printf("STOPPING...\n");
 
     /* Wait for thread completion */
-    for (i = 0; i < nb_threads; i++) {
-      if (pthread_join(threads[i], NULL) != 0) {
-	fprintf(stderr, "Error waiting for thread completion\n");
-	exit(1);
-      }
-    }
+	for (i = 0; i < nb_threads; i++) {
+		if (pthread_join(threads[i], NULL) != 0) {
+			fprintf(stderr, "Error waiting for thread completion\n");
+			exit(1);
+		}
+	}
+
+	::std::cout << "Numbers Added" << ::std::endl;
+
+	for (i = 0; i < nb_threads; i++) {
+		::std::cout << "Starting thread " << i << ::std::endl;
+
+		if (pthread_create(&threads[i], &attr, test_contains, (void *) (&data[i]))!= 0) {
+			::std::cerr << "Error creating thread\n";
+			exit(1);
+		}
+	}
+
+	/* Start threads */
+	barrier_cross(&barrier);
+
+	printf("STOPPING...\n");
+
+	/* Wait for thread completion */
+	for (i = 0; i < nb_threads; i++) {
+		if (pthread_join(threads[i], NULL) != 0) {
+			fprintf(stderr, "Error waiting for thread completion\n");
+			exit(1);
+		}
+	}
+
+	::std::cout << "Numbers Tested" << ::std::endl;
+
+		for (i = 0; i < nb_threads; i++) {
+			::std::cout << "Starting thread " << i << ::std::endl;
+
+			if (pthread_create(&threads[i], &attr, test_remove, (void *) (&data[i]))!= 0) {
+				::std::cerr << "Error creating thread\n";
+				exit(1);
+			}
+		}
+
+		/* Start threads */
+		barrier_cross(&barrier);
+
+		printf("STOPPING...\n");
+
+		/* Wait for thread completion */
+		for (i = 0; i < nb_threads; i++) {
+			if (pthread_join(threads[i], NULL) != 0) {
+				fprintf(stderr, "Error waiting for thread completion\n");
+				exit(1);
+			}
+		}
+
+    gettimeofday(&end, NULL);
 
     duration = (end.tv_sec * 1000 + end.tv_usec / 1000) -
       (start.tv_sec * 1000 + start.tv_usec / 1000);
@@ -484,6 +410,7 @@ int main(int argc, char** argv){
     updates = 0;
     effupds = 0;
     max_retries = 0;
+    size= 0;
     for (i = 0; i < nb_threads; i++) {
       printf("Thread %d\n", i);
       printf("  #add        : %lu\n", data[i].nb_add);
@@ -523,20 +450,12 @@ int main(int argc, char** argv){
 	   (reads + updates) * 1000.0 / duration);
 
     printf("#read txs     : ");
-    if (effective) {
-      printf("%lu (%f / s)\n", effreads, effreads * 1000.0 / duration);
-      printf("  #contains   : %lu (%f / s)\n", reads, reads * 1000.0 /
-	     duration);
-    } else printf("%lu (%f / s)\n", reads, reads * 1000.0 / duration);
+    printf("%lu (%f / s)\n", reads, reads * 1000.0 / duration);
 
     printf("#eff. upd rate: %f \n", 100.0 * effupds / (effupds + effreads));
 
     printf("#update txs   : ");
-    if (effective) {
-      printf("%lu (%f / s)\n", effupds, effupds * 1000.0 / duration);
-      printf("  #upd trials : %lu (%f / s)\n", updates, updates * 1000.0 /
-	     duration);
-    } else printf("%lu (%f / s)\n", updates, updates * 1000.0 / duration);
+    printf("%lu (%f / s)\n", updates, updates * 1000.0 / duration);
 
     printf("#aborts       : %lu (%f / s)\n", aborts, aborts * 1000.0 /
 	   duration);
