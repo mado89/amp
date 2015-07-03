@@ -33,6 +33,10 @@ pthread_key_t rng_seed_key;
 #endif /* ! TLS */
 unsigned int levelmax;
 
+#ifdef MEM_MANAG
+extern MemoryManager* manager;
+#endif
+
 SkipList* sl_set_new(int type)
 {
 	SkipList *set;
@@ -254,6 +258,10 @@ int main(int argc, char** argv){
 			exit(1);
 		}
 	}
+
+#ifdef MEM_MANAG
+	manager= new MemoryManager();
+#endif
 
 	assert(duration >= 0);
 	assert(nb_threads > 0);
@@ -481,6 +489,10 @@ int main(int argc, char** argv){
 
     free(threads);
     free(data);
+
+#ifdef MEM_MANAG
+	delete manager;
+#endif
 
 	return 0;
 }

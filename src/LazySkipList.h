@@ -7,8 +7,11 @@
 #include <pthread.h>
 #include <limits>
 
-class LazySkipList: public SkipList {
-private:
+#ifdef MEM_MANAG
+#include "MemoryManager.h"
+extern MemoryManager* manager;
+#endif
+
 class LazyNode {
 	public:
 		pthread_mutex_t ilock;
@@ -21,7 +24,10 @@ class LazyNode {
 
 	public:
 		LazyNode(int x, int levels) : item(x), next((LazyNode**) new LazyNode*[levels+1]) {
-
+#ifdef DEBUG
+			::std::cout << this << " LazyNode::LazyNode(" << x << "," << levels << ")" << ::std::endl;
+			::std::cout << "Next: " << next << ::std::endl;
+#endif
 			// Init Lock. Set it to Reentrant behaviour
 			pthread_mutexattr_t attr;
 			pthread_mutexattr_init(&attr);
@@ -29,9 +35,15 @@ class LazyNode {
 			pthread_mutex_init(&ilock, &attr);
 
 			topLevel= levels;
+
+			for(int i= 0; i <= levels; i++)
+				next[i]= NULL;
 		}
 
 		~LazyNode() {
+#ifdef DEBUG
+			::std::cout << this << " LazyNode::~LazyNode" << ::std::endl;
+#endif
 			pthread_mutex_destroy(&ilock);
 			/*for(int i= 0; i < topLevel+1; i++)
 				delete next[i];*/
@@ -49,24 +61,60 @@ class LazyNode {
 		}
 
 		int height(){ return topLevel; }
+
+		friend void destroy(void*);
 };
 
+void destroy(void* obj) {
+#ifdef DEBUG
+			::std::cout << obj << " LazyNode::destroy" << ::std::endl;
+#endif
+	pthread_mutex_destroy(&((LazyNode*)obj)->ilock);
+	for(int i= 0; i < ((LazyNode*)obj)->topLevel+1; i++) {
+		manager->dec_ref(((LazyNode*)obj)->next[i]);
+		//delete next[i];
+	}
+#ifdef DEBUG
+			::std::cout << "LazyNode::destroy delete" << ((LazyNode*)obj)->next << ::std::endl;
+#endif
+	delete[] ((LazyNode*)obj)->next;
+}
+
+class LazySkipList: public SkipList {
 private:
 	LazyNode* head;
 	LazyNode* tail;
 public:
 	LazySkipList(int levelmax) : SkipList(levelmax) {
-		head= new LazyNode(::std::numeric_limits<int>::min(),levelmax);
-		tail= new LazyNode(::std::numeric_limits<int>::max(),levelmax);
+#ifdef DEBUG
+		::std::cout << this << " LazySkipList::LazySkipList(" << levelmax << ")" << ::std::endl;
+#endif
+		
+		LazyNode* a= (LazyNode*) malloc(sizeof(LazyNode));
+		head= new (a) LazyNode(::std::numeric_limits<int>::min(),levelmax);
+
+		LazyNode* b= (LazyNode*) malloc(sizeof(LazyNode));
+		tail= new (b) LazyNode(::std::numeric_limits<int>::max(),levelmax);
+		
+#ifdef MEM_MANAG
+		manager->inc_ref(head);
+		manager->inc_ref(tail);
+		manager->debugMem();
+#endif
 
 		for(int i= 0; i <= head->height(); i++) {
+#ifdef MEM_MANAG
+			manager->inc_ref(tail);
+#endif
 			head->next[i]= tail;
 		}
 	}
 
 	~LazySkipList() {
-		delete head;
-		delete tail;
+		head->~LazyNode();
+		tail->~LazyNode();
+		free(head);
+		free(tail);
 	}
 
 private:
@@ -89,6 +137,19 @@ private:
 	}
 
 public:
+	void debugList() {
+		for(int l = MAX_LEVEL; l >= 0; l--) {
+			::std::cout << "Level: " << l << ::std::endl;
+			::std::cout << head << "/" << head->item;
+			LazyNode* cur= head->next[l];
+			while(cur) {
+				::std::cout << " " << cur << "/" << cur->item;
+				cur= cur->next[l];
+			}
+			::std::cout << ::std::endl;
+		}
+	}
+
 	bool add(int x) {
 		int k = random_level(MAX_LEVEL);
 
@@ -137,10 +198,14 @@ public:
 				continue; // failed, retry
 			}
 
-			LazyNode* newNode = new LazyNode(x, k); // allocate new
+			LazyNode* a= (LazyNode*) malloc(sizeof(LazyNode));
+			LazyNode* newNode = new (a) LazyNode(x, k); // allocate new
 			for (int level = 0; level <= k; level++) {
 				newNode->next[level] = succs[level];
 				preds[level]->next[level] = newNode;
+#ifdef MEM_MANAG
+				manager->inc_ref(newNode);
+#endif
 			}
 			newNode->fullylinked = true;
 
@@ -169,9 +234,6 @@ public:
 
 		LazyNode* preds[MAX_LEVEL+1];
 		LazyNode* succs[MAX_LEVEL+1];
-#ifdef MEM_MANAG
-		::std::list<LazyNode*> deletes;
-#endif
 
 		// ::std::cout << "remove " << x << ::std::endl;
 
@@ -209,29 +271,21 @@ public:
 						preds[l]->unlock();
 					continue;
 				}
+#ifdef MEM_MANAG
+				//victim is needed later for unlocking
+				manager->inc_ref(victim);
+#endif
 				for (int l=k; l>=0; l--) {
 #ifdef MEM_MANAG
-					LazyNode* x= preds[l]->next[l];
+					manager->dec_ref(preds[l]->next[l],&destroy);
 #endif
 					preds[l]->next[l] = victim->next[l];
-#ifdef MEM_MANAG
-					::std::list<LazyNode*>::iterator it= deletes.begin();
-					while( it != deletes.end() && (*it) != x ) {
-										it++;
-					}
-					if( it == deletes.end() )
-						deletes.push_back(x);
-#endif
 				}
 				victim->unlock();
 				for (int l = 0; l <= highlock; l++)
 					preds[l]->unlock();
 #ifdef MEM_MANAG
-				::std::list<LazyNode*>::iterator it= deletes.begin();
-				while( it != deletes.end() ) {
-					delete *it;
-					it++;
-				}
+				manager->dec_ref(victim,&destroy);
 #endif
 				return true;
 			}
