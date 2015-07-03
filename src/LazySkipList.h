@@ -61,17 +61,21 @@ class LazyNode {
 		}
 
 		int height(){ return topLevel; }
-
+//#ifdef MEM_MANAG
 		friend void destroy(void*);
+//#endif
 };
 
+//#ifdef MEM_MANAG
 void destroy(void* obj) {
 #ifdef DEBUG
 			::std::cout << obj << " LazyNode::destroy" << ::std::endl;
 #endif
 	pthread_mutex_destroy(&((LazyNode*)obj)->ilock);
 	for(int i= 0; i < ((LazyNode*)obj)->topLevel+1; i++) {
+#ifdef MEM_MANAG
 		manager->dec_ref(((LazyNode*)obj)->next[i]);
+#endif
 		//delete next[i];
 	}
 #ifdef DEBUG
@@ -79,6 +83,7 @@ void destroy(void* obj) {
 #endif
 	delete[] ((LazyNode*)obj)->next;
 }
+//#endif
 
 class LazySkipList: public SkipList {
 private:
@@ -287,6 +292,10 @@ public:
 #ifdef MEM_MANAG
 				manager->dec_ref(victim,&destroy);
 #endif
+/*#else
+				destroy(victim);
+				free(victim);
+#endif*/
 				return true;
 			}
 			else {
