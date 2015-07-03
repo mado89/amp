@@ -38,7 +38,7 @@ class LockFreeNode {
 
 		~LockFreeNode() {
 			pthread_mutex_destroy(&ilock);
-			::std::cout << "~LockFreeNode " << this << ::std::endl;
+//			::std::cout << "~LockFreeNode " << this << ::std::endl;
 			delete[] next;
 		}
 
@@ -60,28 +60,25 @@ private:
 
 public:
 	LockFreeSkipList(int levelmax) : SkipList(levelmax) {
-
-		::std::cout << "H";
-
 		head= new LockFreeNode(::std::numeric_limits<int>::min(),levelmax);
 		tail= new LockFreeNode(::std::numeric_limits<int>::max(),levelmax);
 
 		for(int i= 0; i < head->height(); i++) {
 			head->next[i].init(tail,false);
-			head->next[i].inc_ref();
+			// head->next[i].inc_ref();
 		}
 	}
 
 	~LockFreeSkipList() {
-		::std::cout << "~LockFreeSkipList" << ::std::endl;
-		for(int i= 0; i < head->height(); i++) {
+//		::std::cout << "~LockFreeSkipList" << ::std::endl;
+		/*for(int i= 0; i < head->height(); i++) {
 			head->next[i].dec_ref();
-		}
-		::std::cout << "Head next pointers decreased" << ::std::endl;
+		}*/
+//		::std::cout << "Head next pointers decreased" << ::std::endl;
 		delete head;
-		::std::cout << "Head deleted" << ::std::endl;
+//		::std::cout << "Head deleted" << ::std::endl;
 		delete tail;
-		::std::cout << "Tail deleted" << ::std::endl;
+//		::std::cout << "Tail deleted" << ::std::endl;
 	}
 
 private:
@@ -234,7 +231,7 @@ public:
 					marked= succs[b]->next[b].get_mark();
 					if (done) {
 						find(x, preds, succs); // clean up concurrent remove
-						delete remNode;
+//						delete remNode;
 						return true;
 //					} else if (*marked)
 					} else if (marked)

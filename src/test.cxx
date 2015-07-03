@@ -88,6 +88,7 @@ void *test(void *data) {
 	val_t last = -1;
 	val_t val = 0;
 	int unext;
+	thread_local int i= 0;
 
 	benchthread_data_t *d = (benchthread_data_t *) data;
 
@@ -98,7 +99,11 @@ void *test(void *data) {
 	unext = (rand_range_re(&d->seed, 100) - 1 < d->update);
 
 	while (stop == 0) {
-
+		if(i == 1000 ) {
+			printf("Thread: %d\n", pthread_self());
+			i= 0;
+		}
+		i++;
 		if (unext) { // update
 
 			if (last < 0) { // add

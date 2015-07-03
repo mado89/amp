@@ -6,22 +6,22 @@
 #include <pthread.h>
 #include <map>
 
+template <typename T> struct MySPmR {
+	T*   addr;
+	bool mark;
+};
+
 template <typename T> class MySPm{
 private:
-	::std::atomic<int>* c;
+//	::std::atomic<int>* c;
 	T** i;
 	// bool* m;
 	bool m2;
+
 	pthread_mutex_t l;
 
-	typedef typename ::std::map<T*,::std::atomic<int>*> mymap;
-	typedef typename MySPm<T>::mymap::iterator iterator;
-
-	static ::std::map<T*,::std::atomic<int>*> int_mem;
-	static pthread_mutex_t int_mem_l;
-
 public:
-	MySPm<T>() : c(NULL) {
+	MySPm<T>() {
 		i= new T*;
 //		m= new bool;
 //		(*m)= false;
@@ -34,7 +34,7 @@ public:
 		pthread_mutex_init(&l, NULL);
 	}
 
-	MySPm<T>(T* t, bool mark=false) : c(NULL) {
+	MySPm<T>(T* t, bool mark=false) {
 		pthread_mutexattr_t attr;
 		pthread_mutexattr_init(&attr);
 		pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_NORMAL);
@@ -46,50 +46,8 @@ public:
 
 	~MySPm<T>() {
 		// ::std::cout << "~MySPm " << (*c) << ::std::endl;
-		if(c != NULL && *c == 0 ) {
-			if(*i != NULL)
-				delete *i;
-		}
 		delete i;
 //		delete m;
-	}
-
-	void inc_ref() {
-//		assert(m>0);
-		(*c)++;
-	}
-
-	static ::std::atomic<int>* inc_ref(T* addr) {
-		iterator it;
-		it= MySPm<T>::int_mem.find(addr);
-		if( it != MySPm<T>::int_mem.end() ) {
-			(*it->second)++;
-			return it->second;
-		} else {
-			::std::atomic<int>* h= new ::std::atomic<int>(1);
-			::std::pair<T*,::std::atomic<int>*> val(addr,h);
-			MySPm<T>::int_mem.insert(it, val);
-			return h;
-		}
-	}
-
-	static void debugMem() {
-
-	}
-
-	void dec_ref() {
-//		assert(m>0);
-		(*c)--;
-	}
-
-	static void dec_ref(T** addr) {
-		iterator it;
-		it= MySPm<T>::int_mem.find(addr);
-		(*it->second)--;
-		if( (*it->second) == 0 ) {
-			delete *addr;
-			MySPm<T>::int_mem.erase(it);
-		}
 	}
 
 	/*T* get(bool **marked) {
@@ -129,7 +87,7 @@ public:
 		m2= mark;
 		//int_mem.
 
-		c= inc_ref(val);
+//		c= inc_ref(val);
 //		assert(m>0);
 		pthread_mutex_unlock(&l);
 	}
@@ -158,8 +116,5 @@ public:
 		return ret;
 	}
 };
-
-template<typename T> ::std::map<T*,::std::atomic<int>*> MySPm<T>::int_mem;
-template<typename T> pthread_mutex_t MySPm<T>::int_mem_l;
 
 #endif /* _MYSPM_H */
