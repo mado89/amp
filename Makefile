@@ -1,6 +1,6 @@
 OBJS= src/*.cxx
 CC=$(CXX)
-CFLAGS = -I. -Wall -g -std=c++11
+CFLAGS = -I. -Wall -std=c++11
 CXXFLAGS = $(CFLAGS)
 LDFLAGS = -lpthread
 LOADLIBES = 

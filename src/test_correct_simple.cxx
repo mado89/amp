@@ -480,6 +480,28 @@ int main(int argc, char** argv){
 	   aborts_invalid_memory * 1000.0 / duration);
     printf("Max retries   : %lu\n", max_retries);
 
+    int added= 0;
+	printf("#bench#addedT");
+	for (i = 0; i < nb_threads; i++) {
+		printf(";%ld", data[i].nb_added);
+		added+= data[i].nb_added;
+	}
+	printf("\n#bench#added:%d\n", added);
+	int removed = 0;
+	printf("#bench#removedT");
+	for (i = 0; i < nb_threads; i++) {
+		printf(";%ld", data[i].nb_removed);
+		removed += data[i].nb_removed;
+	}
+	printf("\n#bench#removed:%d\n", added);
+	int contains = 0;
+	printf("#bench#containsT");
+	for (i = 0; i < nb_threads; i++) {
+		printf(";%ld", data[i].nb_contains);
+		contains += data[i].nb_added;
+	}
+	printf("\n#bench#contains:%d\n", contains);
+
     /* Delete set */
     sl_set_delete(set);
 

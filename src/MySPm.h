@@ -56,6 +56,17 @@ public:
 		return *i;
 	}*/
 
+	MySPmR<T>* get() {
+		pthread_mutex_lock(&l);
+		MySPmR<T>* ret= new MySPmR<T>;
+		ret->addr= *i;
+		ret->mark= m2;
+		pthread_mutex_unlock(&l);
+
+		return ret;
+	}
+
+	/*
 	T* get_pointer() {
 //		assert(m>0);
 		return *i;
@@ -65,7 +76,7 @@ public:
 //		assert(m>0);
 //		return (*m);
 		return m2;
-	}
+	}*/
 
 	void set_mark(bool mark) {
 		pthread_mutex_lock(&l);

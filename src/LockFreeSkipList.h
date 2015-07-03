@@ -87,28 +87,37 @@ private:
 		LockFreeNode* curr = NULL;
 		LockFreeNode* succ = NULL;
 //		bool* marked;
-		bool mark;
+//		bool mark;
 
 
 	retry:
 		while (true) {
 			pred = head;
 			for (int l = MAX_LEVEL; l >= 0; l--) {
-				curr = pred->next[l].get_pointer();
+				MySPmR<LockFreeNode>* dat= pred->next[l].get();
+				curr= dat->addr;
+				// curr = pred->next[l].get_pointer();
 				while (true) {
 //					succ = curr->next[l].get(&marked);
-					succ = curr->next[l].get_pointer();
-					mark= curr->next[l].get_mark();
+					dat= curr->next[l].get();
+					succ= dat->addr;
+//					succ = curr->next[l].get_pointer();
+					//mark= curr->next[l].get_mark();
 //					while(*marked) { // link out marked nodes
-					while(mark) { // link out marked nodes
+					while(dat->mark) { // link out marked nodes
 						bool snip= pred->next[l].CASp(curr,succ,false,false);
-						// ::std::cout << "In CAS loop " << snip << ::std::endl;
+						::std::cout << "In CAS loop " << snip << ::std::endl;
 						if (!snip)
 							goto retry;
-						curr = pred->next[l].get_pointer();
+						dat= pred->next[l].get();
+						curr= dat->addr;
+//						delete dat;
+						dat= curr->next[l].get();
+						succ= dat->addr;
+//						curr = pred->next[l].get_pointer();
 //						succ = curr->next[l].get(&marked);
-						succ = curr->next[l].get_pointer();
-						mark= curr->next[l].get_mark();
+//						succ = curr->next[l].get_pointer();
+//						mark= curr->next[l].get_mark();
 					}
 					if( curr->item < key) {
 						pred = curr;
@@ -155,6 +164,7 @@ public:
 					while (true) {
 						pred = preds[l];
 						succ = succs[l];
+//						::std::cout << "In Add-CAS loop " << ::std::endl;
 						if (pred->next[l].CASp(succ, newNode, false, false))
 							break;
 						find(x, preds, succs);
@@ -170,18 +180,30 @@ public:
 		LockFreeNode* pred = head;
 		LockFreeNode* curr = NULL;
 		LockFreeNode* succ = NULL;
-//		bool* marked;
+		MySPmR<LockFreeNode>* dat;
 
 		for (int l = MAX_LEVEL; l >= bottom; l--) {
-			curr = pred->next[l].get_pointer();
+			dat= pred->next[l].get();
+			curr= dat->addr;
 			while (true) {
 //				succ = curr->next[l].get(&marked);
-				succ = curr->next[l].get_pointer();
+				dat= curr->next[l].get();
+				succ= dat->addr;
+//				succ = curr->next[l].get_pointer();
 //				while (*marked) {
-				while (curr->next[l].get_mark()) {
-					curr = pred->next[l].get_pointer();
+				int i= 0;
+				while (dat->mark) {
+					::std::cout << "In Contains marked " << i << ::std::endl;
+					dat= curr->next[l].get();
+					curr= dat->addr;
+//					delete dat;
+					dat= curr->next[l].get();
+					succ= dat->addr;
+//					curr = pred->next[l].get_pointer();
 //					succ = curr->next[l].get(&marked);
-					succ = curr->next[l].get_pointer();
+//					succ = curr->next[l].get_pointer();
+//					marked= curr->next[l].get_mark();
+					i++;
 				}
 				if (curr->item < item) {
 					pred = curr;
@@ -199,6 +221,7 @@ public:
 		LockFreeNode* succs[MAX_LEVEL+1];
 		LockFreeNode* succ= NULL;
 //		bool* marked;
+		MySPmR<LockFreeNode>* dat;
 
 
 		while (true) {
@@ -207,34 +230,42 @@ public:
 			else {
 				// shortcut lists from k down to b+1
 				LockFreeNode* remNode = succs[b];
-				for (int l = remNode->height()-1; l >= b + 1; l--) {
-					succ = remNode->next[l].get_pointer();
+				for (int l = remNode->height()-1; l > b; l--) {
+					dat= remNode->next[l].get();
+					succ= dat->addr;
+//					succ = remNode->next[l].get_pointer();
 					// succ = remNode->next[l].get(&marked);
-					bool mark= remNode->next[l].get_mark();
+//					bool mark= remNode->next[l].get_mark();
 //					while (!(remNode->next[l].get_mark())) {
-					while(mark == 0) {
-						remNode->next[l].CASp(succ, succ,false, true);
+					while(!dat->mark) {
+						remNode->next[l].CASp(succ, succ, false, true);
 						// succ = remNode->next[l].get(&marked);
-						succ = remNode->next[l].get_pointer();
-						mark= remNode->next[l].get_mark();
+						dat= remNode->next[l].get();
+						succ= dat->addr;
+//						succ = remNode->next[l].get_pointer();
+//						mark= remNode->next[l].get_mark();
 					}
 				}
 
 				// level 0 list
 //				succ = remNode->next[b].get(&marked);
-				succ = remNode->next[b].get_pointer();
-				bool marked= remNode->next[b].get_mark();
+				dat= remNode->next[b].get();
+				succ= dat->addr;
+//				succ = remNode->next[b].get_pointer();
+//				bool marked= remNode->next[b].get_mark();
 				while (true) {
 					bool done = remNode->next[b].CASp(succ, succ, false, true);
 //					succ = succs[b]->next[b].get(&marked);
-					succ = succs[b]->next[b].get_pointer();
-					marked= succs[b]->next[b].get_mark();
+					dat= succs[b]->next[b].get();
+					succ= dat->addr;
+//					succ = succs[b]->next[b].get_pointer();
+//					marked= succs[b]->next[b].get_mark();
 					if (done) {
 						find(x, preds, succs); // clean up concurrent remove
 //						delete remNode;
 						return true;
 //					} else if (*marked)
-					} else if (marked)
+					} else if (dat->mark)
 						return false;
 				}
 			}

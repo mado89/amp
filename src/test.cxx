@@ -99,11 +99,11 @@ void *test(void *data) {
 	unext = (rand_range_re(&d->seed, 100) - 1 < d->update);
 
 	while (stop == 0) {
-		if(i == 1000 ) {
+		/*if(i == 1000 ) {
 			printf("Thread: %d\n", pthread_self());
 			i= 0;
 		}
-		i++;
+		i++;*/
 		if (unext) { // update
 
 			if (last < 0) { // add
@@ -463,6 +463,7 @@ int main(int argc, char** argv){
 
     /* Wait for thread completion */
     for (i = 0; i < nb_threads; i++) {
+    	// pthread_cancel(threads[i]);
       if (pthread_join(threads[i], NULL) != 0) {
 	fprintf(stderr, "Error waiting for thread completion\n");
 	exit(1);
