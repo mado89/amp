@@ -106,7 +106,7 @@ private:
 //					while(*marked) { // link out marked nodes
 					while(dat->mark) { // link out marked nodes
 						bool snip= pred->next[l].CASp(curr,succ,false,false);
-						::std::cout << "In CAS loop " << snip << ::std::endl;
+//						::std::cout << "In CAS loop " << snip << ::std::endl;
 						if (!snip)
 							goto retry;
 						dat= pred->next[l].get();
@@ -193,7 +193,7 @@ public:
 //				while (*marked) {
 				int i= 0;
 				while (dat->mark) {
-					::std::cout << "In Contains marked " << i << ::std::endl;
+//					::std::cout << "In Contains marked " << i << ::std::endl;
 					dat= curr->next[l].get();
 					curr= dat->addr;
 //					delete dat;
