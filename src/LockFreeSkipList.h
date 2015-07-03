@@ -61,6 +61,8 @@ private:
 public:
 	LockFreeSkipList(int levelmax) : SkipList(levelmax) {
 
+		::std::cout << "H";
+
 		head= new LockFreeNode(::std::numeric_limits<int>::min(),levelmax);
 		tail= new LockFreeNode(::std::numeric_limits<int>::max(),levelmax);
 

@@ -260,7 +260,6 @@ int main(int argc, char** argv){
 	assert(range > 0 && range >= initial);
 
 	::std::cout << "Set type     : skip list\n";
-	::std::cout << "Duration     : " << duration << ::std::endl;
 	::std::cout << "Nb threads   : " << nb_threads << ::std::endl;
 	::std::cout << "Value range  : " << range << ::std::endl;
 	::std::cout << "Type sizes   : int=" << (int)sizeof(int) <<
@@ -269,7 +268,7 @@ int main(int argc, char** argv){
 
 	levelmax = floor_log_2((unsigned int) range);
 
-	::std::cout << "const";
+	::std::cout << "Constructing: ";
 	set = sl_set_new(type);
 	::std::cout << "done" << ::std::endl;
 

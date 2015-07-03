@@ -169,6 +169,9 @@ public:
 
 		LazyNode* preds[MAX_LEVEL+1];
 		LazyNode* succs[MAX_LEVEL+1];
+#ifdef MEM_MANAG
+		::std::list<LazyNode*> deletes;
+#endif
 
 		// ::std::cout << "remove " << x << ::std::endl;
 
@@ -207,14 +210,29 @@ public:
 					continue;
 				}
 				for (int l=k; l>=0; l--) {
-					// LazyNode* x= preds[l]->next[l];
+#ifdef MEM_MANAG
+					LazyNode* x= preds[l]->next[l];
+#endif
 					preds[l]->next[l] = victim->next[l];
-					// ::std::cout << "Ich loesche!" << ::std::endl;
-					// delete x;
+#ifdef MEM_MANAG
+					::std::list<LazyNode*>::iterator it= deletes.begin();
+					while( it != deletes.end() && (*it) != x ) {
+										it++;
+					}
+					if( it == deletes.end() )
+						deletes.push_back(x);
+#endif
 				}
 				victim->unlock();
 				for (int l = 0; l <= highlock; l++)
 					preds[l]->unlock();
+#ifdef MEM_MANAG
+				::std::list<LazyNode*>::iterator it= deletes.begin();
+				while( it != deletes.end() ) {
+					delete *it;
+					it++;
+				}
+#endif
 				return true;
 			}
 			else {
