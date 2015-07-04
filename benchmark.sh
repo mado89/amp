@@ -23,7 +23,7 @@ run_tests() {
         # runs time function for the called script, output in a comma seperated
         # format output file specified with -o command and -a specifies append
 	echo '======' $command_to_run '======' >> bench.log
-        /usr/bin/time -f "%E,%U,%S" -o ${output_file} -a ${command_to_run} >> bench.log 2>&1
+        /usr/bin/time -f "%E;%U;%S" -o ${output_file} -a ${command_to_run} >> bench.log 2>&1
 	echo '++++++' $command_to_run '++++++' >> bench.log
 
         # Clear the HDD cache (I hope?)
