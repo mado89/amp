@@ -25,32 +25,32 @@ do
 
 	./benchmark.sh -n $repeats -c "./bin/test_correct_simple -l LockFreeSkipList -t $proc -r 100000"
 	grep "#bench" bench.log | sed 's/\#bench\#//g'  > "results/test.lfs.$proc.log"
-	tail -n 31 benchmark_results | head -n 30 > "results/test.lfs.$proc.times"
+	tail -n 31 benchmark_results.csv | head -n 30 > "results/test.lfs.$proc.times"
 	rm bench.log
 
 	./benchmark.sh -n $repeats -c "./bin/test_correct_simple -l LazySkipList -t $proc -r 100000"
 	grep "#bench" bench.log | sed 's/\#bench\#//g'  > "results/test.ls.$proc.log"
-	tail -n 31 benchmark_results | head -n 30 > "results/test.ls.$proc.times"
+	tail -n 31 benchmark_results.csv | head -n 30 > "results/test.ls.$proc.times"
 	rm bench.log
 
 	./benchmark.sh -n $repeats -c "./bin/test_correct_simple -l TestList -t $proc -r 100000"
 	grep "#bench" bench.log | sed 's/\#bench\#//g'  > "results/test.tl.$proc.log"
-	tail -n 31 benchmark_results | head -n 30 > "results/test.tl.$proc.times"
+	tail -n 31 benchmark_results.csv | head -n 30 > "results/test.tl.$proc.times"
 	rm bench.log
 
 	./benchmark.sh -n $repeats -c "./bin/test_correct_range -l LockFreeSkipList -t $proc -r 10000"
 	grep "#bench" bench.log | sed 's/\#bench\#//g'  > "results/range.lfs.$proc.log"
-	tail -n 31 benchmark_results | head -n 30 > "results/range.lfs.$proc.times"
+	tail -n 31 benchmark_results.csv | head -n 30 > "results/range.lfs.$proc.times"
 	rm bench.log
 
 	./benchmark.sh -n $repeats -c "./bin/test_correct_range -l LazySkipList -t $proc -r 10000"
 	grep "#bench" bench.log | sed 's/\#bench\#//g'  > "results/range.ls.$proc.log"
-	tail -n 31 benchmark_results | head -n 30 > "results/range.ls.$proc.times"
+	tail -n 31 benchmark_results.csv | head -n 30 > "results/range.ls.$proc.times"
 	rm bench.log
 
 	./benchmark.sh -n $repeats -c "./bin/test_correct_range -l TestList -t $proc -r 10000"
 	grep "#bench" bench.log | sed 's/\#bench\#//g'  > "results/range.tl.$proc.log"
-	tail -n 31 benchmark_results | head -n 30 > "results/range.tl.$proc.times"
+	tail -n 31 benchmark_results.csv | head -n 30 > "results/range.tl.$proc.times"
 	rm bench.log
 done
 
